@@ -1,5 +1,5 @@
-# The Forecast of Stock Price And Its Trend Based on Support Vertor Machine
+# The Forecast of Stock Price And Its Trend Based on SVM
 
 Requirements:  
-Python2.7  
-Tushare
+ Python2.7  
+ Tushare
