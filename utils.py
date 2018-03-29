@@ -242,6 +242,31 @@ sw.loc[:,'bull_mid'] = bmean
 sw.loc[:,'bull_upper'] = bupper
 sw.loc[:,'bull_lowwer'] = blowwer
 
+# n日K线值
+data = sw[['open','close','high','low']]
+def nk_line(data,n):
+    temp = data[['close']]
+    column_name = ['open_%s' %n, 'high_%s' %n, 'low_%s' %n]
+    temp.loc[:,column_name[0]] = data['open'].shift(n)
+    temp.loc[:,column_name[1]] = data['high'].shift(n)
+    temp.loc[:,column_name[2]] = data['low'].shift(n)
+    return temp.apply( lambda x: (x[0]-x[1])/(x[2]-x[3]) ,axis=1)
+
+sw.loc[:,'0kline'] = nk_line(data,0)
+sw.loc[:,'3kline'] = nk_line(data,3)
+sw.loc[:,'6kline'] = nk_line(data,6)
+
+# n日乖离线率（BIAS）
+def bias(close,n):
+    temp = close
+    temp.loc[:,'close_ave'] = 0
+    for i in np.arange(1,n,1):
+        temp['close_ave'] += temp['close'].shift(i)
+    temp.loc[:,'close_ave'] = (temp['close_ave']+temp['close']) / n
+    return temp.apply(lambda x: (x[0]-x[1])/x[1]*100 ,axis=1)
+
+sw.loc[:,'bias_6'] = bias(sw[['close']],6)
+sw.loc[:,'bias_10'] = bias(sw[['close']],10)
 
 # label
 def future(v):
@@ -270,39 +295,9 @@ t2.loc[:,'label'] = t2['future_cond_sum'].apply(trade_or_not)
 
 sw = pd.merge(sw,t2, on=column_name, how='left')
 
+# 将特征工程后的数据存入csv文件
 sw.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv', index=None)
 sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
-
-
-from sklearn import preprocessing
-from sklearn.svm import SVC
-sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
-
-# n日K线值
-data = sw[['open','close','high','low']]
-def nk_line(data,n):
-    temp = data[['close']]
-    column_name = ['open_%s' %n, 'high_%s' %n, 'low_%s' %n]
-    temp.loc[:,column_name[0]] = data['open'].shift(n)
-    temp.loc[:,column_name[1]] = data['high'].shift(n)
-    temp.loc[:,column_name[2]] = data['low'].shift(n)
-    return temp.apply( lambda x: (x[0]-x[1])/(x[2]-x[3]) ,axis=1)
-
-sw.loc[:,'0kline'] = nk_line(data,0)
-sw.loc[:,'3kline'] = nk_line(data,3)
-sw.loc[:,'6kline'] = nk_line(data,6)
-
-# n日乖离线率（BIAS）
-def bias(close,n):
-    temp = close
-    temp.loc[:,'close_ave'] = 0
-    for i in np.arange(1,n,1):
-        temp['close_ave'] += temp['close'].shift(i)
-    temp.loc[:,'close_ave'] = (temp['close_ave']+temp['close']) / n
-    return temp.apply(lambda x: (x[0]-x[1])/x[1]*100 ,axis=1)
-
-sw.loc[:,'bias_6'] = bias(sw[['close']],6)
-sw.loc[:,'bias_10'] = bias(sw[['close']],10)
 
 
 # 总资产，每进行一次卖出交易便清算一次现有资产
@@ -421,8 +416,3 @@ def location(id):
 def year_profit(cp, t):
     return (1+cp)**(250.0/t)-1
 y_pt = []
-
-
-data_try = sw[11:-10] # 2188
-data_try = data_try[data_try.date>='2011-03-24'] # 1500
-data_try.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10_data_try2.csv', index=None)
