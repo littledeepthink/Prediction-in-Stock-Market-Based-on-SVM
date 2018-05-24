@@ -3,25 +3,25 @@ import numpy as np
 import pandas as pd
 import tushare as ts
 
-sw = ts.get_k_data(code='000001', index=True, start='2008-05-12', end='2017-06-10', ktype='D', retry_count=3)
-del sw['code']
-sw.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv', index=None)
-sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
+sk = ts.get_k_data(code='000001', index=True, start='2008-05-12', end='2017-06-10', ktype='D', retry_count=3)
+del sk['code']
+sk.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv', index=None)
+sk = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
 
-# 移动平均（价格）
-def ma(s, n):
-    m = s.shape[0]
-    mavalue = pd.Series([0.0]*m)
+# 移动平均(价格)
+def p_ma(p, n):
+    m = p.shape[0]
+    p_mavalue = pd.Series([0.0]*m)
     for i in range(m-n+1):
-        s_tem = s[i:i+n]
-        mavalue[i+n-1] = np.mean(s_tem)
-    return mavalue
+        p_tem = p[i:i+n]
+        p_mavalue[i+n-1] = np.mean(p_tem)
+    return p_mavalue
 
-sw.loc[:,'ma5'] = ma(sw['close'],5)
-sw.loc[:,'ma10'] = ma(sw['close'],10)
-sw.loc[:,'ma20'] = ma(sw['close'],20)
+sk['ma5'] = p_ma(sk['close'], 5)
+sk['ma10'] = p_ma(sk['close'], 10)
+sk['ma20'] = p_ma(sk['close'], 20)
 
-# 移动平均（成交量）
+# 移动平均(成交量)
 def v_ma(v, n):
     m = v.shape[0]
     v_mavalue = pd.Series([0.0]*m)
@@ -30,9 +30,9 @@ def v_ma(v, n):
         v_mavalue[i+n-1] = np.mean(v_tem)
     return v_mavalue
 
-sw.loc[:,'v_ma5'] = v_ma(sw['volume'],5)
-sw.loc[:,'v_ma10'] = v_ma(sw['volume'],10)
-sw.loc[:,'v_ma20'] = v_ma(sw['volume'],20)
+sk['v_ma5'] = v_ma(sk['volume'], 5)
+sk['v_ma10'] = v_ma(sk['volume'], 10)
+sk['v_ma20'] = v_ma(sk['volume'], 20)
 
 # 价格变动
 def price_change(s):
@@ -42,7 +42,7 @@ def price_change(s):
         pc[i+1] = s[i+1] - s[i]
     return pc
 
-sw.loc[:,'price_change'] = price_change(sw['close'])
+sk['price_change'] = price_change(sk['close'])
 
 # 涨跌幅
 def price_change_rate(s):
@@ -52,50 +52,49 @@ def price_change_rate(s):
         pcr[i+1] = float(s[i+1]-s[i])/s[i] *100
     return pcr
 
-sw.loc[:,'p_change'] = price_change_rate(sw['close'])
+sk['p_change'] = price_change_rate(sk['close'])
 
 # 相对于过去10天的收益率
-temp = sw[['date', 'close']]
-for i in np.arange(1,11,1):
-    column_name = 'close_%s' %i
-    temp_temp = temp['close'].copy()[:-i]
-    temp_temp = pd.concat([pd.Series([0]*i),temp_temp], axis=0)
-    lt = [i for i in temp_temp]
-    temp.loc[:,column_name] = pd.Series(lt)
+new = sk[['day', 'close']]
+for i in range(1, 11, 1):
+    column_name = 'close_%s' % i
+    # 按列拼接后得到滞后i个交易日后的close数据(Series)
+    temp = pd.concat([pd.Series([0] * i), new['close'][:-i]], axis=0)
+    new.insert(new.shape[1], column_name, temp.values)
 
-for i in np.arange(1,11,1):
+for i in range(1, 11, 1):
     column_name = 'return_rate_%s' %i
-    temp.loc[:,column_name] = temp.apply(lambda s: (s[1]/s[i+1] - 1)*100 if s[i+1]>0 else np.nan, axis=1)
+    temp = new.apply(lambda s: (s[1]/s[i+1] - 1)*100 if s[i+1]>0 else np.nan, axis=1) # 按行进行lambda函数运算
+    new.insert(new.shape[1], column_name, temp.values)
 
-sw = pd.merge(sw,temp, on=['date','close'], how='left')
+sk = pd.merge(sk, new, on=['day','close'], how='left')
 
-for i in np.arange(1,11,1):
+for i in range(1, 11, 1):
     column_name = 'close_%s' %i
-    del sw[column_name]
+    del sk[column_name]
 
 # 平均价格
-t = sw[['high','close','low']]
-t.loc[:,'ave_price'] = t.apply(lambda s: (s[0]+s[1]+s[2])/3, axis=1)
+new = sk[['high','close','low']]
+temp = new.apply(lambda s: (s[0]+s[1]+s[2])/3, axis=1)
+new.insert(new.shape[1], 'ave_price', temp.values)
 
-# 未来十天的平均价格
-for j in np.arange(1,11,1):
-    column_name = 'ave_price_%s' %j
-    future = t['ave_price'].copy()[j:]
-    future = pd.concat([ future, pd.Series([0]*j) ], axis=0)
-    lt = [i for i in future]
-    t.loc[:,column_name] = pd.Series(lt)
+# 未来十天相对于当天的收益率
+for j in range(1, 11, 1):
+    column_name = 'ave_price_%s' % j
+    # 按列拼接后得到未来i个交易日的平均价格数据
+    future = pd.concat([new['ave_price'][j:], pd.Series([0]*j)], axis=0)
+    new.insert(new.shape[1], column_name, future.values)
 
+for j in range(1, 11, 1):
+    column_name = 'future_rate_%s' % j
+    temp = new.apply(lambda s: (s[j+3] / s[1] - 1) * 100 if s[j+3] > 0 else np.nan, axis=1)
+    new.insert(new.shape[1], column_name, temp.values)
 
-# 未来十天的收益率
-for j in np.arange(1,11,1):
-    column_name = 'future_rate_%s' %j
-    t.loc[:,column_name] = t.apply(lambda s: (s[j+3] / s[1] - 1) * 100 if s[j+3] > 0 else np.nan, axis=1)
+for j in range(1, 11, 1):
+    column_name = 'ave_price_%s' % j
+    del new[column_name]
 
-for j in np.arange(1,11,1):
-    column_name = 'ave_price_%s' %j
-    del t[column_name]
-
-sw = pd.merge(sw,t, on=['high','close','low'], how='left')
+sk = pd.merge(sk, new, on=['high','close','low'], how='left')
 
 
 ######### 技术指标 ##########
@@ -121,9 +120,9 @@ def dea(s, start, end):
     return pd.Series( [ i for i in d[0] ] )
 
 def macd(s, start, end):
-    return dif(s,start,end)-dea(s,start,end)
+    return dif(s, start, end) - dea(s, start, end)
 
-sw.loc[:,'macd'] = macd(sw['close'],12,26)
+sk['macd'] = macd(sk['close'], 12, 26)
 
 # KDJ  随机指标
 def rsv(s,n):
@@ -134,7 +133,7 @@ def rsv(s,n):
         r[i+n-1] = 100 * float(s_tem[i+n-1]-min(s_tem)) / (max(s_tem)-min(s_tem))
     return r
 
-r = rsv(sw['close'], 10)
+r = rsv(sk['close'], 10)
 
 def k(s, n, r):
     m = s.shape[0]
@@ -145,7 +144,7 @@ def k(s, n, r):
         kvalue[i+1] = float(1)/3*rseries[i+1] + float(2)/3*kvalue[i]
     return kvalue
 
-k = k(sw['close'], 10, r)
+k = k(sk['close'], 10, r)
 
 def d(s, n, k):
     m = s.shape[0]
@@ -156,13 +155,13 @@ def d(s, n, k):
         dvalue[i+1] = float(1)/3*kseries[i+1] + float(2)/3*dvalue[i]
     return dvalue
 
-d = d(sw['close'],10,k)
+d = d(sk['close'], 10, k)
 
 j = 3*k - 2*d
 
-sw.loc[:,'k_value'] = k
-sw.loc[:,'d_value'] = d
-sw.loc[:,'j_value'] = j
+sk['k_value'] = k
+sk['d_value'] = d
+sk['j_value'] = j
 
 
 #  CCI 顺势指标
@@ -179,7 +178,7 @@ def cci(s, n, h, l):
         c[0,i+n-1] = 1/0.015*( tp[i+n-1]-ma[0,i+n-1] ) / md[0,i+n-1]
     return pd.Series( [ i for i in c[0] ] )
 
-sw.loc[:,'cci'] = cci(sw['close'], 12, sw['high'],sw['low'])
+sk['cci'] = cci(sk['close'], 12, sk['high'], sk['low'])
 
 
 # RSI 相对强弱指标  n取9或14
@@ -191,29 +190,29 @@ def rsi(piord, n):
     for i in range(m-n+1):
         p_tem = piord[i:i+n]
         a[i+n-1] = p_tem.apply(lambda x: x if x>=0 else 0).sum()
-        b[i+n-1] = p_tem.apply(lambda x: np.abs(x)
-        if x<0 else 0).sum()
-           rs[i+n-1] = a[i+n-1]/( a[i+n-1]+b[i+n-1] ) * 100
+        b[i+n-1] = p_tem.apply(lambda x: np.abs(x) if x<0 else 0).sum()
+        rs[i+n-1] = a[i+n-1]/( a[i+n-1]+b[i+n-1] ) * 100
     return rs
 
-sw.loc[:,'rsi'] = rsi(sw['p_change'],14)
+sk['rsi_14'] = rsi(sk['p_change'], 14)
+
 
 #  ROC 变动速率
-def roc(s,n):  # n天前
+def roc(s, n):  # n天前
     m = s.shape[0]
     ro = pd.Series([0.0]*m)
     for i in range(m-n):
         ro[i+n] = s[i+n] / s[i]
     return ro
 
-sw.loc[:,'roc'] = roc(sw['close'],10)
+sk['roc'] = roc(sk['close'], 10)
 
 # OBV
 def obv(h, s, l, v):
     fz = 2*s-h-l
     return (fz/(h-l) * v).replace(np.NAN,0)
 
-sw.loc[:,'obv'] = obv(sw['high'],sw['close'],sw['low'],sw['volume'])
+sk['obv'] = obv(sk['high'], sk['close'], sk['low'], sk['volume'])
 
 # BULL
 def bullsd(s, n):
@@ -225,7 +224,7 @@ def bullsd(s, n):
         bs[i+n-1] = np.sqrt( bs[i+n-1] )
     return bs
 
-bsdvalue = bullsd(sw['close'],10)
+bsdvalue = bullsd(sk['close'], 10)
 
 def bullmean(s, n):
     m = s.shape[0]
@@ -234,56 +233,63 @@ def bullmean(s, n):
         s_tem = s[i:i+n]
         bm[i+n-1] = np.mean(s_tem)
     return bm
-bmean = bullmean(sw['close'],10)
+bmean = bullmean(sk['close'], 10)
 bupper = bmean + 2*bsdvalue
 blowwer = bmean - 2*bsdvalue
 
-sw.loc[:,'bull_mid'] = bmean
-sw.loc[:,'bull_upper'] = bupper
-sw.loc[:,'bull_lowwer'] = blowwer
+sk['bull_mid'] = bmean
+sk['bull_upper'] = bupper
+sk['bull_lowwer'] = blowwer
+
 
 # n日K线值
-data = sw[['open','close','high','low']]
-def nk_line(data,n):
+data = sk[['open', 'close', 'high', 'low']]
+def nk_line(data, n):
     temp = data[['close']]
     column_name = ['open_%s' %n, 'high_%s' %n, 'low_%s' %n]
     temp.loc[:,column_name[0]] = data['open'].shift(n)
     temp.loc[:,column_name[1]] = data['high'].shift(n)
     temp.loc[:,column_name[2]] = data['low'].shift(n)
-    return temp.apply( lambda x: (x[0]-x[1])/(x[2]-x[3]) ,axis=1)
+    return temp.apply( lambda x: (x[0]-x[1])/(x[2]-x[3]), axis=1)
 
-sw.loc[:,'0kline'] = nk_line(data,0)
-sw.loc[:,'3kline'] = nk_line(data,3)
-sw.loc[:,'6kline'] = nk_line(data,6)
+sk['0kline'] = nk_line(data, 0)
+sk['3kline'] = nk_line(data, 3)
+sk['6kline'] = nk_line(data, 6)
 
-# n日乖离线率（BIAS）
-def bias(close,n):
-    temp = close
-    temp.loc[:,'close_ave'] = 0
-    for i in np.arange(1,n,1):
-        temp['close_ave'] += temp['close'].shift(i)
-    temp.loc[:,'close_ave'] = (temp['close_ave']+temp['close']) / n
-    return temp.apply(lambda x: (x[0]-x[1])/x[1]*100 ,axis=1)
+# n日乖离线率(BIAS)
+def bias(close, n):
+    for i in range(1, n, 1):
+        column_name = 'close_%s' % i
+        temp = close['close'].shift(i)
+        close.insert(close.shape[1], column_name, temp.values)
+    ave = close.apply(lambda x: np.mean(x), axis=1)
+    posi = close.shape[1]
+    close.insert(posi, 'close_ave', ave.values)
+    return close.apply(lambda x: (x[0]-x[posi])/x[posi]*100, axis=1)
 
-sw.loc[:,'bias_6'] = bias(sw[['close']],6)
-sw.loc[:,'bias_10'] = bias(sw[['close']],10)
+sk['bias_6'] = bias(sk[['close']], 6)
+sk['bias_10'] = bias(sk[['close']], 10)
+
 
 # label
+# 计算未来10个交易日相对于当前交易日的总条件收益率
 def future(v):
     s = 0
     for i in range(10):
         if (v[i]>1) | (v[i]<-1):
-            s = s+v[i]
+            s += v[i]
     return s
 
 column_name =[]
-for i in np.arange(1,11,1):
+for i in range(1, 11, 1):
     temp_name = 'future_rate_%s' %i
     column_name.append(temp_name)
 
-t2 = sw[column_name]
-t2.loc[:,'future_cond_sum'] = t2.apply(future, axis=1)
+new = sk[column_name]
+temp = new.apply(future, axis=1)
+new.insert(new.shape[1], 'future_cond_sum', temp.values)
 
+# 判断label的类型
 def trade_or_not(x):
     if x>15:
         return 1
@@ -291,14 +297,17 @@ def trade_or_not(x):
         return -1
     else:
         return 0
-t2.loc[:,'label'] = t2['future_cond_sum'].apply(trade_or_not)
 
-sw = pd.merge(sw,t2, on=column_name, how='left')
+temp = new['future_cond_sum'].apply(trade_or_not)
+new.insert(new.shape[1], 'label', temp.values)
+
+sk = pd.merge(sk, new, on=column_name, how='left')
 
 # 将特征工程后的数据存入csv文件
-sw.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv', index=None)
-sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
+sk.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv', index=None)
 
+
+sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
 
 # 总资产，每进行一次卖出交易便清算一次现有资产
 def total_money(l,price):
@@ -415,4 +424,3 @@ def location(id):
 # 年化收益率
 def year_profit(cp, t):
     return (1+cp)**(250.0/t)-1
-y_pt = []
