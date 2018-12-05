@@ -309,66 +309,54 @@ sk.to_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.cs
 
 sw = pd.read_csv('E:\Data Mining And Machine Learning\dataset\stocks\index_new_day10.csv')
 
-# 总资产，每进行一次卖出交易便清算一次现有资产
-def total_money(l,price):
+# 总资产的变动
+def total_money(l, price, fee):
+    """
+    Args:
+        l: 预测交易信号
+        price: 标的价格
+        fee: 交易费率
+    """
     m = l.shape[0]
     teml = l.tolist()
     start = teml.index(max(teml))  # 寻找首次交易对应的索引
     money = pd.Series([np.NAN] * m)  # 资金的积累
-    money_start = 1
-    money[start] = money_start
+    money_start = 100
+    for i in range(start+1):
+        money[i] = money_start
     s = start
-    money_exchange = money_start / price[start]
+    money_exchange = money_start / price[start] * (1-fee)
     for i in np.arange(start, m - 1, 1):
-        while l[i + 1] * l[s] < 0:
-            money_exchange = price[i + 1] ** -l[i + 1] * money_exchange
+        if l[i + 1] * l[s] < 0:
             if l[i + 1] < 0:
-                money[i + 1] = money_exchange
+                # 卖出
+                money_exchange *= price[i + 1]
+                money[i + 1] = money_exchange * (1-fee)
+            else:
+                # 买入
+                money_exchange /= price[i + 1]
+                money[i+1] = money[i] * (1-fee)
             s = i + 1
-    return money
+        else:
+            if l[s] < 0:
+                money[i+1] = money[i]
+            else:
+                money[i+1] = money[i] / price[i] * price[i+1]
+    cum_profit = money[m-1]/money[0] - 1.0
+    year_profit = (1+cum_profit)**(250.0/m) - 1.0
+    return (money, cum_profit, year_profit)
 
-# 添加手续费后总资产
-def total_money2(l,price):
-    m = l.shape[0]
-    teml = l.tolist()
-    start = teml.index(max(teml))
-    money = pd.Series([np.NAN] * m)
-    money_start = 1
-    money[start] = money_start
-    s = start
-    money_exchange = money_start / price[start] * (1-3.0/1000)
-    for i in np.arange(start, m - 1, 1):
-        while l[i + 1] * l[s] < 0:
-            money_exchange = price[i + 1] ** -l[i + 1] * money_exchange * (1-3.0/1000)
-            if l[i + 1] < 0:
-                money[i + 1] = money_exchange
-            s = i + 1
-    return money
-
-
-# 累计收益率
-def cum_profit(l,price):
-    m = l.shape[0]
-    teml = l.tolist()
-    start = teml.index(max(teml))
-    s = start
-    money_exchange = 1 / price[start]
-    for i in np.arange(start, m - 1, 1):
-        while l[i + 1] * l[s] < 0:
-            money_exchange = price[i + 1] ** -l[i + 1] * money_exchange
-            s = i + 1
-    if l[s]>0:
-        return money_exchange*price[s] - 1
-    else:
-        return money_exchange - 1
 
 # 最大回撤
 def max_retracement(money_nona):
+    """
+    Args: money_nona: 累计总资产
+    """
     n = money_nona.shape[0]
     if n==1:
         return 0
     else:
-        retrace = pd.Series( [0.0]*(n-1) )
+        retrace = pd.Series([0.0]*(n-1))
         for t in range(n-1):
             money_tem = money_nona[:t+2]
             number = money_tem.shape[0]
@@ -378,6 +366,7 @@ def max_retracement(money_nona):
             retrace[t] = min(loss)
         return min(retrace)
 
+        
 # 每次交易的日期
 def trade_date(l, date):
     m = l.shape[0]
@@ -394,6 +383,7 @@ def trade_date(l, date):
     else:
         return trade_d
 
+        
 # 最大连续下跌次数
 def max_count_down(money_nona):
     n = money_nona.shape[0]
@@ -415,12 +405,14 @@ def max_count_down(money_nona):
     else:
         return max(c_list[0::2])
 
+        
 # 最优参数的对应位置
 def location(id):
     g = id/11
     c = np.mod(id,11)
     return g,c
 
+    
 # 年化收益率
 def year_profit(cp, t):
     return (1+cp)**(250.0/t)-1
