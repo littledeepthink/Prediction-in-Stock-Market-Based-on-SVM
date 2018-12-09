@@ -55,7 +55,7 @@ def price_change_rate(s):
 sk['p_change'] = price_change_rate(sk['close'])
 
 # 相对于过去10天的收益率
-new = sk[['day', 'close']]
+new = sk[['date', 'close']]
 for i in range(1, 11, 1):
     column_name = 'close_%s' % i
     # 按列拼接后得到滞后i个交易日后的close数据(Series)
@@ -67,7 +67,7 @@ for i in range(1, 11, 1):
     temp = new.apply(lambda s: (s[1]/s[i+1] - 1)*100 if s[i+1]>0 else np.nan, axis=1) # 按行进行lambda函数运算
     new.insert(new.shape[1], column_name, temp.values)
 
-sk = pd.merge(sk, new, on=['day','close'], how='left')
+sk = pd.merge(sk, new, on=['date','close'], how='left')
 
 for i in range(1, 11, 1):
     column_name = 'close_%s' %i
